@@ -7,4 +7,5 @@
 
 技术方案
 - [Text Classification with BigDL](https://github.com/intel-analytics/BigDL/blob/branch-0.1/pyspark/example/tutorial/simple_text_classification/text_classfication.ipynb)
+- [Deep Learning for Text Classification in Azure GPU-Accelerated Infrastructure](https://github.com/Azure/Cortana-Intelligence-Gallery-Content/tree/master/Tutorials/Deep-Learning-for-Text-Classification-in-Azure)
 - [Microsoft Machine Learning for Apache Spark](https://github.com/Azure/mmlspark)
