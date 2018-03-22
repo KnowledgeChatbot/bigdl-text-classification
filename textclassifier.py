@@ -1,4 +1,5 @@
-#
+#usr/bin/python
+# -*- encoding: utf-8 -*-
 # Copyright 2016 The BigDL Authors.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
@@ -13,12 +14,13 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 #
-
-
+import io
 import itertools
 import re
 from optparse import OptionParser
 
+import jieba
+from pyfasttext import FastText
 from bigdl.dataset import news20
 from bigdl.nn.layer import *
 from bigdl.nn.criterion import *
@@ -29,8 +31,10 @@ import datetime as dt
 
 
 def text_to_words(review_text):
-    letters_only = re.sub("[^a-zA-Z]", " ", review_text)
-    words = letters_only.lower().split()
+    words = jieba.cut(review_text.replace("\t"," ").replace("\n"," "))
+#    uncomment this to check jieba tokenize result.
+#    with io.open('join.txt', 'w+',encoding='utf-8') as f:
+#        f.write(' '.join(words))
     return words
 
 
@@ -99,17 +103,31 @@ def train(sc, data_path,
           batch_size,
           sequence_len, max_words, embedding_dim, training_split):
     print('Processing text dataset')
-    texts = news20.get_news20(source_dir=data_path)
+    # tests is an array of tuple (words, label) 
+    categories = [\
+    'active directory','api management','app service','application gateway','backup','classic','cloud services',\
+    'Computer-vision','cosmos db','Emotion','event hubs','expressroute','icp','iot suite','linux','power bi-workspace-collections',\
+    'redis cache','service bus-messaging','service bus-relay','service health','site recovery','sql database','sql data-warehouse','virtual machine-scale-sets',\
+    'virtual network','vpn gateway','windows','计费、订阅和发票','一般问题','执行与维护','注册问题']
+    texts = [] 
+    directory = '/home/azureuser/dump'
+    for i in range(0,len(categories)-1):
+        directory = '/home/azureuser/dump/'+categories[i]
+        for filename in os.listdir(directory):
+            with open(os.path.join(directory,filename))as filetxt:
+                stringcontent = filetxt.read()
+                texts.append((stringcontent,i+1))
     data_rdd = sc.parallelize(texts, 2)
 
     word_to_ic = analyze_texts(data_rdd)
 
     # Only take the top wc between [10, sequence_len]
     word_to_ic = dict(word_to_ic[10: max_words])
-    bword_to_ic = sc.broadcast(word_to_ic)
-
-    w2v = news20.get_glove_w2v(dim=embedding_dim)
-    filtered_w2v = dict((w, v) for w, v in w2v.items() if w in word_to_ic)
+    bword_to_ic = sc.broadcast(word_to_ic) 
+    
+    # word2vec model is the pre-trained FastText model for chinese, since glove     # does not support chinese
+    w2v = FastText('/home/azureuser/cc.zh.300.bin')
+    filtered_w2v = dict((w, w2v[w]) for w in w2v.words if w in word_to_ic)
     bfiltered_w2v = sc.broadcast(filtered_w2v)
 
     tokens_rdd = data_rdd.map(lambda text_label:
@@ -128,7 +146,7 @@ def train(sc, data_path,
         [training_split, 1-training_split])
 
     optimizer = Optimizer(
-        model=build_model(news20.CLASS_NUM),
+        model=build_model(len(categories)),
         training_rdd=train_rdd,
         criterion=ClassNLLCriterion(),
         end_trigger=MaxEpoch(max_epoch),
