@@ -124,7 +124,6 @@ def train(sc, data_path,
     # Only take the top wc between [10, sequence_len]
     word_to_ic = dict(word_to_ic[10: max_words])
     bword_to_ic = sc.broadcast(word_to_ic) 
-    
     # word2vec model is the pre-trained FastText model for chinese, since glove     # does not support chinese
     w2v = FastText('/home/azureuser/cc.zh.300.bin')
     filtered_w2v = dict((w, w2v[w]) for w in w2v.words if w in word_to_ic)
@@ -170,7 +169,7 @@ def train(sc, data_path,
     optimizer.set_val_summary(val_summary)
 
     train_model = optimizer.optimize()
-
+    train_model.saveModel('model.bigdl','model.bin',True)
 
 if __name__ == "__main__":
     parser = OptionParser()
