@@ -17,8 +17,7 @@
 import io
 import itertools
 import re
-from optparse import OptionParser
-
+import json
 import jieba
 from pyfasttext import FastText
 from bigdl.dataset import news20
@@ -27,7 +26,9 @@ from bigdl.nn.criterion import *
 from bigdl.optim.optimizer import *
 from bigdl.util.common import *
 from bigdl.util.common import Sample
-import datetime as dt
+from flask import Flask, request,make_response
+from flask_restful import Resource, Api
+from flask_jsonpify import jsonify
 
 
 def text_to_words(review_text):
@@ -73,39 +74,8 @@ def to_sample(vectors, label, embedding_dim):
     return Sample.from_ndarray(features, np.array(label))
 
 
-def build_model(class_num):
-    model = Sequential()
-
-    if model_type.lower() == "cnn":
-        model.add(TemporalConvolution(embedding_dim, 256, 5)) \
-            .add(ReLU()) \
-            .add(TemporalMaxPooling(sequence_len - 5 + 1)) \
-            .add(Squeeze(2))
-    elif model_type.lower() == "lstm":
-        model.add(Recurrent()
-                  .add(LSTM(embedding_dim, 256, p)))
-        model.add(Select(2, -1))
-    elif model_type.lower() == "gru":
-        model.add(Recurrent()
-                  .add(GRU(embedding_dim, 256, p)))
-        model.add(Select(2, -1))
-
-    model.add(Linear(256, 128)) \
-        .add(Dropout(0.2)) \
-        .add(ReLU()) \
-        .add(Linear(128, class_num)) \
-        .add(LogSoftMax())
-
-    return model
-
-
-def predict(sc,targetSentence,targetRange,sequence_len, max_words, embedding_dim):
+def predict(targetSentence,targetRange):
     # tests is an array of tuple (words, label) 
-    categories = [\
-    'active directory','api management','app service','application gateway','backup','classic','cloud services',\
-    'Computer-vision','cosmos db','Emotion','event hubs','expressroute','icp','iot suite','linux','power bi-workspace-collections',\
-    'redis cache','service bus-messaging','service bus-relay','service health','site recovery','sql database','sql data-warehouse','virtual machine-scale-sets',\
-    'virtual network','vpn gateway','windows','计费、订阅和发票','一般问题','执行与维护','注册问题']
     texts = [(targetSentence,0)] 
     data_rdd = sc.parallelize(texts, 1)
 
@@ -115,8 +85,7 @@ def predict(sc,targetSentence,targetRange,sequence_len, max_words, embedding_dim
     word_to_ic = dict(word_to_ic)
     bword_to_ic = sc.broadcast(word_to_ic) 
     # word2vec model is the pre-trained FastText model for chinese, since glove     # does not support chinese
-    w2v = FastText('/home/azureuser/cc.zh.300.bin')
-    filtered_w2v = dict((w, w2v[w]) for w in w2v.words if w in word_to_ic)
+    filtered_w2v = dict((w,w2v[w]) for w in w2v.words if w in word_to_ic)
     bfiltered_w2v = sc.broadcast(filtered_w2v)
 
     tokens_rdd = data_rdd.map(lambda text_label:
@@ -132,31 +101,35 @@ def predict(sc,targetSentence,targetRange,sequence_len, max_words, embedding_dim
         lambda vectors_label: to_sample(vectors_label[0], vectors_label[1], embedding_dim))
     
     #load pre-trained model
-    model = Model.loadModel('model.bigdl','model.bin')
     result = model.predict(sample_rdd)
     labels = result.flatMap(lambda text: text)\
                    .zipWithIndex().sortBy(lambda rate: abs(rate[0]))\
-                   .map(lambda k:(categories[k[1]],abs(k[0]))).collect()
+                   .map(lambda k:(categories[k[1]],str(abs(k[0])))).collect()
     selectedLabels = labels[0:targetRange]
-    for label in selectedLabels:
-        print label[0]
-if __name__ == "__main__":
-    parser = OptionParser()
-    parser.add_option("-t", "--target", dest="target")
-    parser.add_option("-r", "--range", dest="expectRange", default="3")
-    parser.add_option("-e", "--embedding_dim", dest="embedding_dim", default="300")  # noqa
-
-    (options, args) = parser.parse_args(sys.argv)
-    sc = SparkContext(appName="text_classifier",
+    return selectedLabels
+def initCategories():
+    cat = []
+    for dirName in os.listdir('/home/azureuser/dump'):
+        cat.append(dirName)
+    return sorted(cat)
+app = Flask(__name__)
+sc = SparkContext(appName="text_classifier",
                           conf=create_spark_conf())
-    target = options.target
-    expectRange = int(options.expectRange)
-    embedding_dim = int(options.embedding_dim)
-    sequence_len = 500
-    max_words = 5000
+model = Model.loadModel('model.bigdl','model.bin')
+w2v = FastText('/home/azureuser/cc.zh.300.bin')
 
-    init_engine()
-    predict(sc,target,expectRange,sequence_len, max_words, embedding_dim)
-    sc.stop()
+max_words = 5000
+sequence_len = 500
+embedding_dim = 300
+expectRange = 3
+init_engine()
+categories = initCategories()
+@app.route("/predict/<targetStr>/<int:expectRange>", methods=['GET'])
+def predictResult(targetStr,expectRange):
+    result=  predict(targetStr,expectRange)
+    return json.dumps(result)
+
+if __name__ == "__main__":
+    app.run(host='0.0.0.0',debug = True)
     
 

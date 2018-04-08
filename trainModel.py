@@ -98,19 +98,18 @@ def build_model(class_num):
 
     return model
 
+def initCategories():
+    cat = []
+    for dirName in os.listdir('/home/azureuser/dump'):
+        cat.append(dirName)
+    return sorted(cat)
 
 def train(sc, data_path,
           batch_size,
           sequence_len, max_words, embedding_dim, training_split):
     print('Processing text dataset')
     # tests is an array of tuple (words, label) 
-    categories = [\
-    'active directory','api management','app service','application gateway','backup','classic','cloud services',\
-    'Computer-vision','cosmos db','Emotion','event hubs','expressroute','icp','iot suite','linux','power bi-workspace-collections',\
-    'redis cache','service bus-messaging','service bus-relay','service health','site recovery','sql database','sql data-warehouse','virtual machine-scale-sets',\
-    'virtual network','vpn gateway','windows','计费、订阅和发票','一般问题','执行与维护','注册问题']
     texts = [] 
-    directory = '/home/azureuser/dump'
     for i in range(0,len(categories)-1):
         directory = '/home/azureuser/dump/'+categories[i]
         for filename in os.listdir(directory):
@@ -199,6 +198,7 @@ if __name__ == "__main__":
         redire_spark_logs()
         show_bigdl_info_logs()
         init_engine()
+        categories = initCategories()
         train(sc, data_path,
               batch_size,
               sequence_len, max_words, embedding_dim, training_split)
