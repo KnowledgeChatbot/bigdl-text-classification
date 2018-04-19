@@ -74,7 +74,7 @@ def to_sample(vectors, label, embedding_dim):
     return Sample.from_ndarray(features, np.array(label))
 
 
-def predict(targetSentence,targetRange):
+def predict(targetSentence,targetRange,model):
     # tests is an array of tuple (words, label) 
     texts = [(targetSentence,0)] 
     data_rdd = sc.parallelize(texts, 1)
@@ -107,6 +107,7 @@ def predict(targetSentence,targetRange):
                    .map(lambda k:(categories[k[1]],str(abs(k[0])))).collect()
     selectedLabels = labels[0:targetRange]
     return selectedLabels
+
 def initCategories():
     cat = []
     for dirName in os.listdir('/home/azureuser/dump'):
@@ -115,7 +116,8 @@ def initCategories():
 app = Flask(__name__)
 sc = SparkContext(appName="text_classifier",
                           conf=create_spark_conf())
-model = Model.loadModel('model.bigdl','model.bin')
+faqmodel = Model.loadModel('faqmodel.bigdl','faqmodel.bin')
+kbmodel = Model.loadModel('model.bigdl','model.bin')
 w2v = FastText('/home/azureuser/cc.zh.300.bin')
 
 max_words = 5000
@@ -124,10 +126,17 @@ embedding_dim = 300
 expectRange = 3
 init_engine()
 categories = initCategories()
-@app.route("/predict/<targetStr>/<int:expectRange>", methods=['GET'])
-def predictResult(targetStr,expectRange):
-    result=  predict(targetStr,expectRange)
+@app.route("/predict/faq/<targetStr>/<int:expectRange>", methods=['GET'])
+def predictFaqResult(targetStr,expectRange):
+    result=  predict(targetStr,expectRange,faqmodel)
     return json.dumps(result)
+
+@app.route("/predict/kb/<targetStr>/<int:expectRange>", methods=['GET'])
+def predictKbResult(targetStr,expectRange):
+    result=  predict(targetStr,expectRange,kbmodel)
+    return json.dumps(result)
+
+
 
 if __name__ == "__main__":
     app.run(host='0.0.0.0',debug = True)

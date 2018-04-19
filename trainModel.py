@@ -100,7 +100,7 @@ def build_model(class_num):
 
 def initCategories():
     cat = []
-    for dirName in os.listdir('/home/azureuser/dump'):
+    for dirName in os.listdir('/home/azureuser/dumparticle'):
         cat.append(dirName)
     return sorted(cat)
 
@@ -111,7 +111,7 @@ def train(sc, data_path,
     # tests is an array of tuple (words, label) 
     texts = [] 
     for i in range(0,len(categories)-1):
-        directory = '/home/azureuser/dump/'+categories[i]
+        directory = '/home/azureuser/dumparticle/'+categories[i]
         for filename in os.listdir(directory):
             with open(os.path.join(directory,filename))as filetxt:
                 stringcontent = filetxt.read()
